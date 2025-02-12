@@ -1,24 +1,13 @@
 #!/usr/bin/env python3
 
 import sys
-import random
 from pathlib import Path
 from ollama_engineer import OllamaEngineer
 
 # --------------------------------------------------------------------------------
-# 1. Console UI utilities
+# Console UI utilities
 # --------------------------------------------------------------------------------
 
-# Word lists for random folder names
-ADJECTIVES = ['swift', 'bright', 'calm', 'wise', 'bold', 'kind', 'pure', 'warm', 'cool', 'soft']
-NOUNS = ['river', 'mountain', 'forest', 'cloud', 'star', 'ocean', 'valley', 'meadow', 'wind', 'sun']
-COLORS = ['azure', 'coral', 'jade', 'amber', 'ruby', 'pearl', 'gold', 'silver', 'bronze', 'crystal']
-
-def generate_random_folder_name() -> str:
-    """Generate a random 3-word folder name"""
-    return f"{random.choice(ADJECTIVES)}_{random.choice(COLORS)}_{random.choice(NOUNS)}"
-
-# Color codes for terminal output
 class Colors:
     BLUE = '\033[94m'
     GREEN = '\033[92m'
@@ -48,7 +37,7 @@ def show_diff_table(files_to_edit):
         print(edit.new_snippet)
         print("-" * 80)
 
-def try_handle_add_command(user_input: str) -> bool:
+def try_handle_add_command(user_input: str, engineer: OllamaEngineer) -> bool:
     """Try to handle an 'add' command for adding file content to context."""
     if user_input.startswith("add "):
         file_path = user_input[4:].strip()
@@ -59,42 +48,17 @@ def try_handle_add_command(user_input: str) -> bool:
         return True
     return False
 
-def guess_files_in_message(user_message: str):
-    """
-    Attempt to guess which files the user might be referencing.
-    Returns normalized absolute paths.
-    """
-    current_dir = Path.cwd()
-    potential_files = []
-    
-    # Split message into words and look for potential file references
-    words = user_message.split()
-    for word in words:
-        # Skip words that are clearly not file paths
-        if len(word) < 2 or word.startswith(("http://", "https://")):
-            continue
-            
-        # Try to construct a path
-        potential_path = current_dir / word
-        if potential_path.exists():
-            potential_files.append(str(potential_path.resolve()))
-            
-    return potential_files
-
 # --------------------------------------------------------------------------------
-# 2. Main interactive loop
+# Main interactive loop
 # --------------------------------------------------------------------------------
 
 def main():
-    global engineer
-    
-    # Create session folder for file operations
-    session_folder = Path.cwd() / generate_random_folder_name()
-    session_folder.mkdir(exist_ok=True)
-    print_color(f"Session folder: {session_folder}", Colors.CYAN)
-    
     # Initialize the Ollama Engineer
     engineer = OllamaEngineer()
+    
+    # Print session folder info
+    session_folder = engineer.get_session_folder()
+    print_color(f"Session folder: {session_folder}", Colors.CYAN)
     
     # Main interaction loop
     print_color("\nOllama Engineer CLI 🚀", Colors.BOLD + Colors.BLUE)
@@ -115,11 +79,11 @@ def main():
                 continue
                 
             # Try to handle special commands
-            if try_handle_add_command(user_input):
+            if try_handle_add_command(user_input, engineer):
                 continue
                 
             # Look for potential file references
-            referenced_files = guess_files_in_message(user_input)
+            referenced_files = engineer.guess_files_in_message(user_input)
             for file_path in referenced_files:
                 engineer.ensure_file_in_context(file_path)
             
@@ -129,7 +93,11 @@ def main():
             # Handle file creations
             if response.files_to_create:
                 for file_to_create in response.files_to_create:
-                    engineer.create_file(file_to_create.path, file_to_create.content)
+                    success, msg = engineer.create_file(file_to_create.path, file_to_create.content)
+                    if success:
+                        print_color(f"✓ {msg}", Colors.GREEN)
+                    else:
+                        print_color(f"✗ {msg}", Colors.RED)
             
             # Handle file edits
             if response.files_to_edit:
@@ -137,10 +105,15 @@ def main():
                 print_color("\nApply these changes? (y/n): ", Colors.YELLOW, end='')
                 if input().lower().startswith('y'):
                     for edit in response.files_to_edit:
-                        if engineer.apply_diff_edit(edit.path, edit.original_snippet, edit.new_snippet):
-                            print_color(f"✓ Applied changes to {edit.path}", Colors.GREEN)
+                        success, msg = engineer.apply_diff_edit(
+                            edit.path,
+                            edit.original_snippet,
+                            edit.new_snippet
+                        )
+                        if success:
+                            print_color(f"✓ {msg}", Colors.GREEN)
                         else:
-                            print_color(f"✗ Failed to apply changes to {edit.path}", Colors.RED)
+                            print_color(f"✗ {msg}", Colors.RED)
                 else:
                     print_color("Changes discarded.", Colors.YELLOW)
             
@@ -154,5 +127,4 @@ def main():
             print_color(f"\nError: {str(e)}", Colors.RED)
 
 if __name__ == "__main__":
-    engineer = None  # Global instance
     main()
