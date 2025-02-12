@@ -113,7 +113,7 @@ class OllamaEngineer:
 
     def create_session_folder(self) -> Path:
         """Create and return a session folder for file operations"""
-        session_folder = Path.cwd() / self.generate_random_folder_name()
+        session_folder = Path.cwd() / "tmp" / self.generate_random_folder_name()
         session_folder.mkdir(exist_ok=True)
         return session_folder
 

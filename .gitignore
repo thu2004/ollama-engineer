@@ -79,4 +79,8 @@ secrets.json
 # Project specific
 node_modules/
 .pytest_cache/
-.mypy_cache/ 
+.mypy_cache/
+
+# Temporary files
+tmp/*
+!tmp/.keep
